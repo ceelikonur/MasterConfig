@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; background: #1a1b23; overflow: hidden; }
+        #terminal { height: 100%; width: 100%; }
+        .xterm, .xterm-viewport, .xterm-screen { height: 100% !important; }
+    </style>
+    <link rel="stylesheet" href="xterm.css"/>
+</head>
+<body>
+    <div id="terminal"></div>
+    <script src="xterm.js"></script>
+    <script src="xterm-addon-fit.js"></script>
+    <script src="xterm-addon-unicode11.js"></script>
+    <script src="xterm-addon-canvas.js"></script>
+    <script>
+        const term = new Terminal({
+            theme: {
+                background:    '#1a1b23',
+                foreground:    '#c0caf5',
+                cursor:        '#7aa2f7',
+                cursorAccent:  '#1a1b23',
+                selectionBackground: '#364A82',
+                black:         '#15161e',
+                red:           '#f7768e',
+                green:         '#9ece6a',
+                yellow:        '#e0af68',
+                blue:          '#7aa2f7',
+                magenta:       '#bb9af7',
+                cyan:          '#7dcfff',
+                white:         '#a9b1d6',
+                brightBlack:   '#414868',
+                brightRed:     '#f7768e',
+                brightGreen:   '#9ece6a',
+                brightYellow:  '#e0af68',
+                brightBlue:    '#7aa2f7',
+                brightMagenta: '#bb9af7',
+                brightCyan:    '#7dcfff',
+                brightWhite:   '#c0caf5',
+            },
+            fontFamily: '"Menlo", "Monaco", "Courier New", monospace',
+            fontSize: 13,
+            lineHeight: 1.0,
+            cursorBlink: true,
+            cursorStyle: 'block',
+            scrollback: 50000,
+            allowProposedApi: true,
+            convertEol: false,
+        });
+
+        const fitAddon = new FitAddon.FitAddon();
+        term.loadAddon(fitAddon);
+
+        // Unicode 11 width tables — proper character width calculation
+        const unicode11Addon = new Unicode11Addon.Unicode11Addon();
+        term.loadAddon(unicode11Addon);
+        term.unicode.activeVersion = '11';
+
+        term.open(document.getElementById('terminal'));
+
+        // Canvas renderer — draws each character at mathematically precise
+        // pixel positions on a <canvas>. Bypasses DOM text layout entirely,
+        // eliminating character overlap caused by font metric mismatches
+        // in WKWebView's DOM renderer.
+        try {
+            const canvasAddon = new CanvasAddon.CanvasAddon();
+            term.loadAddon(canvasAddon);
+        } catch(e) {
+            console.warn('Canvas renderer failed, using DOM fallback:', e);
+        }
+
+        fitAddon.fit();
+
+        // User input → Swift
+        term.onData(data => {
+            window.webkit.messageHandlers.terminalInput.postMessage(data);
+        });
+
+        // Minimum terminal dimensions
+        const MIN_COLS = 40;
+        const MIN_ROWS = 10;
+        let lastSentCols = 0;
+        let lastSentRows = 0;
+
+        // Resize → Swift (with debounce)
+        let resizeTimer = null;
+        term.onResize(({cols, rows}) => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => {
+                const safeCols = Math.max(cols, MIN_COLS);
+                const safeRows = Math.max(rows, MIN_ROWS);
+                if (safeCols !== lastSentCols || safeRows !== lastSentRows) {
+                    lastSentCols = safeCols;
+                    lastSentRows = safeRows;
+                    window.webkit.messageHandlers.terminalResize.postMessage(
+                        JSON.stringify({cols: safeCols, rows: safeRows})
+                    );
+                }
+            }, 50);
+        });
+
+        // Auto-fit on container resize (debounced)
+        let fitTimer = null;
+        const ro = new ResizeObserver(() => {
+            clearTimeout(fitTimer);
+            fitTimer = setTimeout(() => {
+                try { fitAddon.fit(); } catch(e) {}
+            }, 30);
+        });
+        ro.observe(document.getElementById('terminal'));
+
+        // Swift → terminal: write base64-encoded bytes
+        window.writeToTerminal = function(base64) {
+            try {
+                const binary = atob(base64);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                term.write(bytes);
+            } catch(e) {}
+        };
+
+        // Replay full session buffer (on tab switch)
+        window.replayBuffer = function(base64) {
+            term.reset();
+            term.clear();
+            fitAddon.fit();
+            if (base64 && base64.length > 0) window.writeToTerminal(base64);
+            setTimeout(() => fitAddon.fit(), 100);
+        };
+
+        window.fitTerminal = function() {
+            fitAddon.fit();
+        };
+
+        window.getCols = function() { return term.cols; };
+        window.getRows = function() { return term.rows; };
+
+        // Signal ready to Swift after fit
+        setTimeout(() => {
+            fitAddon.fit();
+            const safeCols = Math.max(term.cols, MIN_COLS);
+            const safeRows = Math.max(term.rows, MIN_ROWS);
+            lastSentCols = safeCols;
+            lastSentRows = safeRows;
+            window.webkit.messageHandlers.terminalReady.postMessage(
+                JSON.stringify({cols: safeCols, rows: safeRows})
+            );
+        }, 100);
+    </script>
+</body>
+</html>

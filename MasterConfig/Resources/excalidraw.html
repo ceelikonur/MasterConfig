@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Excalidraw</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1b26; }
+  #root { width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module">
+  import React from "https://esm.sh/react@18";
+  import ReactDOM from "https://esm.sh/react-dom@18/client";
+  import { Excalidraw, exportToBlob } from "https://esm.sh/@excalidraw/excalidraw@0.17.6";
+
+  let excalidrawAPI = null;
+
+  function App() {
+    const [initialData, setInitialData] = React.useState({ elements: [], appState: { theme: 'dark', viewBackgroundColor: '#1a1b26' } });
+
+    React.useEffect(() => {
+      window.loadElements = function(json) {
+        try {
+          const elements = JSON.parse(json);
+          setInitialData(prev => ({ ...prev, elements }));
+        } catch(e) { console.error('Failed to parse elements', e); }
+      };
+    }, []);
+
+    const onchange = React.useCallback((elements, appState) => {
+      if (window.webkit && window.webkit.messageHandlers.elementsChanged) {
+        const json = JSON.stringify(elements);
+        window.webkit.messageHandlers.elementsChanged.postMessage(json);
+      }
+    }, []);
+
+    return React.createElement(Excalidraw, {
+      excalidrawAPI: (api) => { excalidrawAPI = api; },
+      initialData,
+      onChange: onchange,
+      UIOptions: {
+        canvasActions: { changeViewBackgroundColor: false, clearCanvas: true, export: false, loadScene: false, saveToActiveFile: false, theme: false, saveAsImage: false },
+      },
+      theme: 'dark',
+    });
+  }
+
+  const root = ReactDOM.createRoot(document.getElementById('root'));
+  root.render(React.createElement(App));
+</script>
+</body>
+</html>

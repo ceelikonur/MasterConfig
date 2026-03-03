@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monaco Editor</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1b26; }
+  #editor { width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<div id="editor"></div>
+<script src="https://unpkg.com/monaco-editor@0.47.0/min/vs/loader.js"></script>
+<script>
+  require.config({ paths: { vs: 'https://unpkg.com/monaco-editor@0.47.0/min/vs' } });
+  require(['vs/editor/editor.main'], function () {
+    monaco.editor.defineTheme('masterconfig-dark', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [],
+      colors: {
+        'editor.background': '#1a1b26',
+        'editor.foreground': '#c0caf5',
+        'editorLineNumber.foreground': '#565f89',
+        'editorCursor.foreground': '#7aa2f7',
+        'editor.selectionBackground': '#283457',
+        'editor.lineHighlightBackground': '#1f2335',
+      }
+    });
+
+    var editor = monaco.editor.create(document.getElementById('editor'), {
+      value: '',
+      language: 'markdown',
+      theme: 'masterconfig-dark',
+      automaticLayout: true,
+      wordWrap: 'on',
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      fontFamily: 'JetBrains Mono, Menlo, Monaco, Consolas, monospace',
+      fontSize: 14,
+      lineNumbers: 'on',
+      renderLineHighlight: 'line',
+      smoothScrolling: true,
+      cursorBlinking: 'smooth',
+    });
+
+    // Content change handler — debounced
+    var changeTimeout;
+    editor.onDidChangeModelContent(function () {
+      clearTimeout(changeTimeout);
+      changeTimeout = setTimeout(function () {
+        var content = editor.getValue();
+        if (window.webkit && window.webkit.messageHandlers.contentChanged) {
+          window.webkit.messageHandlers.contentChanged.postMessage(content);
+        }
+      }, 300);
+    });
+
+    // Cmd+S handler
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function () {
+      if (window.webkit && window.webkit.messageHandlers.saveRequested) {
+        window.webkit.messageHandlers.saveRequested.postMessage('save');
+      }
+    });
+
+    // Swift bridge functions
+    window.setEditorContent = function(content, language, readOnly, fontSize) {
+      var model = editor.getModel();
+      if (model) {
+        monaco.editor.setModelLanguage(model, language || 'markdown');
+      }
+      editor.setValue(content || '');
+      editor.updateOptions({
+        readOnly: readOnly === true,
+        fontSize: fontSize || 14
+      });
+    };
+
+    window.getEditorContent = function() {
+      return editor.getValue();
+    };
+  });
+</script>
+</body>
+</html>
