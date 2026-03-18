@@ -53,6 +53,9 @@ struct SettingsView: View {
     @State private var envValues: [String: String] = [:]
     @State private var expandedCategories: Set<String> = []
 
+    // Integrations
+    @State private var githubPAT: String = ""
+
     // Raw JSON state
     @State private var rawJSON = "{}"
     @State private var rawSaveStatus: SaveStatus = .idle
@@ -247,6 +250,13 @@ struct SettingsView: View {
                     Divider()
                         .background(Color(red: 0.18, green: 0.19, blue: 0.25))
 
+                    // Integrations
+                    sectionHeader("Integrations")
+                    integrationsSection
+
+                    Divider()
+                        .background(Color(red: 0.18, green: 0.19, blue: 0.25))
+
                     // Allow permissions
                     sectionHeader("Permissions — Allow")
                     permissionsList(
@@ -278,6 +288,45 @@ struct SettingsView: View {
 
             // Bottom bar
             structuredBottomBar
+        }
+    }
+
+    // MARK: - Integrations Section
+
+    private var integrationsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: "key.fill")
+                        .foregroundStyle(Color(red: 0.48, green: 0.64, blue: 0.97))
+                    Text("GitHub Personal Access Token")
+                        .font(.system(.caption, design: .monospaced).weight(.medium))
+                        .foregroundStyle(Color(red: 0.75, green: 0.80, blue: 0.97))
+                }
+                Text("Used by the GitHub MCP server for repo operations (create, push, etc.). Generate at github.com/settings/tokens")
+                    .font(.caption2)
+                    .foregroundStyle(Color(red: 0.34, green: 0.37, blue: 0.55))
+
+                SecureField("ghp_...", text: $githubPAT)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(.caption, design: .monospaced))
+
+                if !githubPAT.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .font(.caption2)
+                        Text("PAT configured — GitHub MCP will be active")
+                            .font(.caption2)
+                            .foregroundStyle(.green)
+                    }
+                }
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(red: 0.13, green: 0.14, blue: 0.18))
+            )
         }
     }
 
@@ -523,6 +572,7 @@ struct SettingsView: View {
         await claudeService.loadSettings()
         loadStructuredFromService()
         rawJSON = claudeService.rawSettingsContent()
+        githubPAT = claudeService.loadGitHubPAT()
     }
 
     private func loadStructuredFromService() {
@@ -550,6 +600,9 @@ struct SettingsView: View {
 
         Task {
             do {
+                // Save GitHub PAT to MCP config
+                try await claudeService.saveGitHubPAT(githubPAT)
+
                 if activeLevel == .global {
                     try await claudeService.saveSettings(settings)
                     rawJSON = claudeService.rawSettingsContent()

@@ -287,6 +287,51 @@ final class ClaudeService {
         await loadSettings()
     }
 
+    // MARK: - GitHub PAT (stored in ~/.claude.json mcpServers.github.env)
+
+    func loadGitHubPAT() -> String {
+        let mcpFile = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".claude.json")
+        guard fm.fileExists(atPath: mcpFile.path),
+              let data = try? Data(contentsOf: mcpFile),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let servers = json["mcpServers"] as? [String: Any],
+              let github = servers["github"] as? [String: Any],
+              let env = github["env"] as? [String: String] else {
+            return ""
+        }
+        return env["GITHUB_PAT"] ?? ""
+    }
+
+    func saveGitHubPAT(_ pat: String) async throws {
+        let mcpFile = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".claude.json")
+        var json: [String: Any] = [:]
+        if fm.fileExists(atPath: mcpFile.path),
+           let data = try? Data(contentsOf: mcpFile),
+           let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            json = existing
+        }
+
+        var servers = json["mcpServers"] as? [String: Any] ?? [:]
+
+        if pat.isEmpty {
+            servers.removeValue(forKey: "github")
+        } else {
+            var github = servers["github"] as? [String: Any] ?? [
+                "command": "npx",
+                "args": ["tsx", "\(NSHomeDirectory())/Desktop/brain_api/scripts/github-mcp.ts"]
+            ]
+            var env = github["env"] as? [String: String] ?? [:]
+            env["GITHUB_PAT"] = pat
+            github["env"] = env
+            servers["github"] = github
+        }
+
+        json["mcpServers"] = servers
+        let data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
+        try data.write(to: mcpFile)
+        await loadMCPServers()
+    }
+
     // MARK: - Search
 
     func search(query: String) -> [SearchResult] {

@@ -30,6 +30,7 @@ targets:
       - path: MasterConfig
         excludes:
           - Resources/Info.plist
+          - MCP/
     resources:
       - path: MasterConfig/Resources
     settings:

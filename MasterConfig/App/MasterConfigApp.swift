@@ -6,7 +6,8 @@ struct MasterConfigApp: App {
     @State private var repoService     = RepoService()
     @State private var prefsService    = PrefsService()
     @State private var fileWatcher     = FileWatcherService()
-    @State private var terminalService = TerminalService()
+    @State private var terminalService      = TerminalService()
+    @State private var orchestratorService  = OrchestratorService()
 
     var body: some Scene {
         WindowGroup {
@@ -16,10 +17,14 @@ struct MasterConfigApp: App {
                 .environment(prefsService)
                 .environment(fileWatcher)
                 .environment(terminalService)
+                .environment(orchestratorService)
                 .task {
+                    // Wire up shared TerminalService for pane-based agent spawning
+                    orchestratorService.terminalService = terminalService
                     await claudeService.loadAll()
                     await repoService.scanRepos()
                     terminalService.discoverOrphanSessions()
+                    await orchestratorService.resumeTeam()
                 }
         }
         .windowStyle(.hiddenTitleBar)

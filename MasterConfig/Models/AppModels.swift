@@ -14,24 +14,26 @@ enum NavSection: String, CaseIterable, Identifiable, Hashable, Sendable {
     case tasks      = "Tasks"
     case search     = "Search"
     case visualize  = "Visualize"
-    case chat       = "Terminal"
+    case chat         = "Terminal"
+    case orchestrator = "Orchestrator"
 
     var id: String { rawValue }
 
     var icon: String {
         switch self {
-        case .overview:  return "square.grid.2x2"
-        case .repos:     return "folder.badge.gearshape"
-        case .skills:    return "bolt.circle"
-        case .agents:    return "person.crop.circle.badge.checkmark"
-        case .plugins:   return "puzzlepiece.extension"
-        case .mcp:       return "server.rack"
-        case .memory:    return "brain"
-        case .settings:  return "gearshape.2"
-        case .tasks:     return "checklist"
-        case .search:    return "magnifyingglass"
-        case .visualize: return "scribble.variable"
-        case .chat:      return "terminal"
+        case .overview:     return "square.grid.2x2"
+        case .repos:        return "folder.badge.gearshape"
+        case .skills:       return "bolt.circle"
+        case .agents:       return "person.crop.circle.badge.checkmark"
+        case .plugins:      return "puzzlepiece.extension"
+        case .mcp:          return "server.rack"
+        case .memory:       return "brain"
+        case .settings:     return "gearshape.2"
+        case .tasks:        return "checklist"
+        case .search:       return "magnifyingglass"
+        case .visualize:    return "scribble.variable"
+        case .chat:         return "terminal"
+        case .orchestrator: return "network"
         }
     }
 }

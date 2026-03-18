@@ -5,6 +5,7 @@ struct ContentView: View {
     @Environment(RepoService.self) private var repoService
     @Environment(PrefsService.self) private var prefsService
     @Environment(TerminalService.self) private var terminalService
+    @Environment(OrchestratorService.self) private var orchestratorService
 
     @State private var selection: NavSection? = .overview
     @State private var showCommandPalette = false
@@ -73,6 +74,8 @@ struct ContentView: View {
             VisualizeView()
         case .chat:
             ChatView()
+        case .orchestrator:
+            OrchestratorView()
         }
     }
 }

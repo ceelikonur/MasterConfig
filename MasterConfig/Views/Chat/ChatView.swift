@@ -17,11 +17,7 @@ struct ChatView: View {
             Group {
                 if let sid = selectedSessionID,
                    let session = terminalService.sessions.first(where: { $0.id == sid }) {
-                    if session.isOrphan {
-                        orphanPrompt(session: session)
-                    } else {
-                        sessionDetail(session: session)
-                    }
+                    sessionDetail(session: session)
                 } else {
                     emptyState
                 }
@@ -54,6 +50,18 @@ struct ChatView: View {
             }
         }
         .navigationTitle("Terminal")
+        .onAppear {
+            // Auto-test: write debug log when Terminal tab appears
+            let msg = "[\(Date())] ChatView appeared\n"
+            let path = "/tmp/mc-debug.log"
+            if let data = msg.data(using: .utf8) {
+                if FileManager.default.fileExists(atPath: path) {
+                    if let fh = FileHandle(forWritingAtPath: path) { fh.seekToEndOfFile(); fh.write(data); fh.closeFile() }
+                } else {
+                    FileManager.default.createFile(atPath: path, contents: data)
+                }
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -70,69 +78,10 @@ struct ChatView: View {
     // MARK: - Session Detail
 
     private func sessionDetail(session: TerminalSession) -> some View {
-        VStack(spacing: 20) {
-            Spacer()
-
-            Image(systemName: "terminal")
-                .font(.system(size: 48))
-                .foregroundStyle(.secondary)
-
-            VStack(spacing: 6) {
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(session.isRunning ? Color.green : Color.gray)
-                        .frame(width: 10, height: 10)
-                    Text(session.title)
-                        .font(.title2.weight(.semibold))
-                }
-
-                Text("tmux: \(session.tmuxName)")
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-
-                if let repoPath = session.repoPath {
-                    HStack(spacing: 4) {
-                        Image(systemName: "folder")
-                            .font(.caption)
-                        Text(repoPath)
-                            .font(.caption)
-                    }
-                    .foregroundStyle(.secondary)
-                }
-            }
-
-            Text("This session runs in Terminal.app via tmux.\nClick below to open or re-attach.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-
-            HStack(spacing: 12) {
-                Button {
-                    terminalService.openInTerminal(sessionName: session.tmuxName)
-                } label: {
-                    Label("Open in Terminal", systemImage: "macwindow")
-                }
-                .buttonStyle(.borderedProminent)
-
-                Button(role: .destructive) {
-                    handleClose(session)
-                } label: {
-                    Label("Kill Session", systemImage: "trash")
-                }
-                .buttonStyle(.bordered)
-            }
-
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.underPageBackgroundColor))
+        SessionDetailView(session: session, onClose: { handleClose(session) })
     }
 
     // MARK: - Session Sidebar
-
-    private var hasOrphans: Bool {
-        terminalService.sessions.contains(where: \.isOrphan)
-    }
 
     private var sessionSidebar: some View {
         VStack(spacing: 0) {
@@ -141,17 +90,6 @@ struct ChatView: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
-                if hasOrphans {
-                    Button {
-                        terminalService.killAllOrphans()
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Kill All Orphan Sessions")
-                }
                 Button {
                     showNewSessionSheet = true
                 } label: {
@@ -201,42 +139,21 @@ struct ChatView: View {
                 .foregroundStyle(.tertiary)
             Text("No Session Selected")
                 .font(.title3.weight(.semibold))
-            Text("Create a new session to start chatting with Claude.\nSessions open in Terminal.app via tmux for\nfull native terminal experience.")
+            Text("Open a new Claude session in terminal.")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            Button("New Session") { showNewSessionSheet = true }
-                .buttonStyle(.borderedProminent)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.underPageBackgroundColor))
-    }
 
-    private func orphanPrompt(session: TerminalSession) -> some View {
-        VStack(spacing: 16) {
-            Image(systemName: "arrow.triangle.2.circlepath")
-                .font(.system(size: 48))
-                .foregroundStyle(.orange)
-            Text("Orphan Session Detected")
-                .font(.title3.weight(.semibold))
-            Text("**\(session.tmuxName)** is still running in the background.\nClaude may be actively working and consuming tokens.")
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            HStack(spacing: 12) {
-                Button {
-                    terminalService.attachToOrphan(session.id)
-                } label: {
-                    Label("Open in Terminal", systemImage: "macwindow")
-                }
-                .buttonStyle(.borderedProminent)
-
-                Button(role: .destructive) {
-                    terminalService.killOrphanSession(session.id)
-                    selectedSessionID = terminalService.sessions.first?.id
-                } label: {
-                    Label("Kill Session", systemImage: "trash")
-                }
-                .buttonStyle(.bordered)
+            Button {
+                terminalService.newSession(title: "Claude")
+                selectedSessionID = terminalService.sessions.last?.id
+            } label: {
+                Label("Open Claude in Terminal", systemImage: "terminal.fill")
             }
+            .buttonStyle(.borderedProminent)
+
+            Button("New Session (with options)") { showNewSessionSheet = true }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.underPageBackgroundColor))
@@ -251,11 +168,7 @@ struct ChatView: View {
                 selectedSessionID = prev ?? next
             }
         }
-        if session.isOrphan {
-            terminalService.killOrphanSession(session.id)
-        } else {
-            terminalService.closeSession(session.id)
-        }
+        terminalService.closeSession(session.id)
     }
 }
 
@@ -270,23 +183,13 @@ struct SessionRow: View {
     var body: some View {
         HStack(spacing: 8) {
             Circle()
-                .fill(session.isOrphan ? Color.orange : (session.isRunning ? Color.green : Color.gray))
+                .fill(session.isRunning ? Color.green : Color.gray)
                 .frame(width: 7, height: 7)
 
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Text(session.title)
-                        .font(.system(size: 13))
-                        .lineLimit(1)
-                    if session.isOrphan {
-                        Text("orphan")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.orange)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(.orange.opacity(0.15), in: RoundedRectangle(cornerRadius: 3))
-                    }
-                }
+                Text(session.title)
+                    .font(.system(size: 13))
+                    .lineLimit(1)
 
                 if let repoPath = session.repoPath {
                     Text(URL(fileURLWithPath: repoPath).lastPathComponent)
@@ -300,16 +203,121 @@ struct SessionRow: View {
 
             if isHovered {
                 Button { onClose() } label: {
-                    Image(systemName: session.isOrphan ? "trash" : "xmark")
+                    Image(systemName: "xmark")
                         .font(.caption2)
-                        .foregroundStyle(session.isOrphan ? .red : .secondary)
+                        .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
-                .help(session.isOrphan ? "Kill Session" : "Close Session")
+                .help("Close Session")
             }
         }
         .padding(.vertical, 3)
         .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - Session Detail View
+
+struct SessionDetailView: View {
+    @Environment(TerminalService.self) private var terminalService
+    let session: TerminalSession
+    let onClose: () -> Void
+
+    @State private var refreshTimer: Timer? = nil
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack(spacing: 12) {
+                Circle()
+                    .fill(session.isRunning ? Color.green : Color.gray)
+                    .frame(width: 10, height: 10)
+                Text(session.title)
+                    .font(.title3.weight(.semibold))
+
+                if let repoPath = session.repoPath {
+                    Divider().frame(height: 16)
+                    Image(systemName: "folder")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(URL(fileURLWithPath: repoPath).lastPathComponent)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button {
+                    Task { await terminalService.refreshOutput(sessionID: session.id) }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .help("Refresh output")
+
+                Text("PID: \(session.processRef)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.secondary.opacity(0.1))
+                    .cornerRadius(4)
+
+                Button(role: .destructive) {
+                    onClose()
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Kill Session")
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+
+            Divider()
+
+            // Terminal output preview
+            if session.lastOutput.isEmpty {
+                VStack(spacing: 12) {
+                    Spacer()
+                    Image(systemName: "terminal")
+                        .font(.system(size: 36))
+                        .foregroundStyle(.tertiary)
+                    Text("Waiting for output...")
+                        .font(.callout)
+                        .foregroundStyle(.tertiary)
+                    Text("Process \(session.processRef) running")
+                        .font(.caption)
+                        .foregroundStyle(.quaternary)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView(.vertical) {
+                    Text(session.lastOutput)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(Color(NSColor.labelColor))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .textSelection(.enabled)
+                }
+                .background(Color(NSColor.textBackgroundColor))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(NSColor.underPageBackgroundColor))
+        .onAppear {
+            Task { await terminalService.refreshOutput(sessionID: session.id) }
+            refreshTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { _ in
+                Task { await terminalService.refreshOutput(sessionID: session.id) }
+            }
+        }
+        .onDisappear {
+            refreshTimer?.invalidate()
+            refreshTimer = nil
+        }
     }
 }
 
@@ -351,7 +359,7 @@ struct NewSessionSheet: View {
 
                     if useRepo {
                         Picker("Repository", selection: $selectedRepo) {
-                            Text("— None —").tag(Optional<Repo>.none)
+                            Text("-- None --").tag(Optional<Repo>.none)
                             ForEach(repoService.repos) { repo in
                                 Text(repo.name).tag(Optional(repo))
                             }
