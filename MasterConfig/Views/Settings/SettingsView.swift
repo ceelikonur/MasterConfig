@@ -35,6 +35,7 @@ private enum SettingsLevel: String, CaseIterable {
 struct SettingsView: View {
     @Environment(ClaudeService.self) private var claudeService
     @Environment(RepoService.self) private var repoService
+    @Environment(ImportExportService.self) private var ieService
     @State private var activeTab: SettingsTab = .structured
     @State private var activeLevel: SettingsLevel = .global
     @State private var selectedRepoPath: String?
@@ -55,6 +56,11 @@ struct SettingsView: View {
 
     // Integrations
     @State private var githubPAT: String = ""
+
+    // Import / Export state
+    @State private var showExportSheet  = false
+    @State private var showImportSheet  = false
+    @State private var importedExport: MasterConfigExport?
 
     // Raw JSON state
     @State private var rawJSON = "{}"
@@ -282,12 +288,29 @@ struct SettingsView: View {
                     // Environment Variables section
                     sectionHeader("Environment Variables")
                     envVarsSection
+
+                    Divider()
+                        .background(Color(red: 0.18, green: 0.19, blue: 0.25))
+
+                    // Import / Export section
+                    sectionHeader("Import / Export")
+                    importExportSection
                 }
                 .padding(24)
             }
 
             // Bottom bar
             structuredBottomBar
+        }
+        .sheet(isPresented: $showExportSheet) {
+            ExportSheet(isPresented: $showExportSheet)
+                .environment(ieService)
+        }
+        .sheet(isPresented: $showImportSheet) {
+            if let exp = importedExport {
+                ImportPreviewSheet(isPresented: $showImportSheet, export: exp)
+                    .environment(ieService)
+            }
         }
     }
 
@@ -327,6 +350,76 @@ struct SettingsView: View {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color(red: 0.13, green: 0.14, blue: 0.18))
             )
+        }
+    }
+
+    // MARK: - Import / Export Section
+
+    private var importExportSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Back up your entire MasterConfig state to a portable bundle, or restore it on another machine.")
+                .font(.caption)
+                .foregroundStyle(Color(red: 0.45, green: 0.48, blue: 0.60))
+
+            HStack(spacing: 12) {
+                // Export
+                Button {
+                    showExportSheet = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.up.doc.fill")
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Export").font(.system(.body, design: .default).weight(.medium))
+                            Text("Save config to .masterconfig file").font(.caption2)
+                                .foregroundStyle(Color(red: 0.45, green: 0.48, blue: 0.60))
+                        }
+                        Spacer()
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity)
+                    .background(Color(red: 0.14, green: 0.15, blue: 0.20))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(red: 0.24, green: 0.27, blue: 0.38), lineWidth: 1))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color(red: 0.75, green: 0.80, blue: 0.97))
+
+                // Import
+                Button {
+                    if let exp = ieService.openImportPanel() {
+                        importedExport = exp
+                        showImportSheet = true
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.down.doc.fill")
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Import").font(.system(.body, design: .default).weight(.medium))
+                            Text("Load from .masterconfig file").font(.caption2)
+                                .foregroundStyle(Color(red: 0.45, green: 0.48, blue: 0.60))
+                        }
+                        Spacer()
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity)
+                    .background(Color(red: 0.14, green: 0.15, blue: 0.20))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(red: 0.24, green: 0.27, blue: 0.38), lineWidth: 1))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color(red: 0.75, green: 0.80, blue: 0.97))
+            }
+
+            if let msg = ieService.lastMessage {
+                HStack(spacing: 6) {
+                    Image(systemName: msg.contains("fail") ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(msg.contains("fail") ? Color.orange : Color.green)
+                    Text(msg)
+                        .font(.caption)
+                        .foregroundStyle(Color(red: 0.75, green: 0.80, blue: 0.97))
+                }
+            }
         }
     }
 

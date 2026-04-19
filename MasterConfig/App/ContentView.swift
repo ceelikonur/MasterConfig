@@ -76,6 +76,16 @@ struct ContentView: View {
             ChatView()
         case .orchestrator:
             OrchestratorView()
+        case .costs:
+            CostsView()
+        case .approvals:
+            ApprovalsView()
+        case .orgChart:
+            OrgChartView()
+        case .routines:
+            RoutinesView()
+        case .activity:
+            ActivityView()
         }
     }
 }

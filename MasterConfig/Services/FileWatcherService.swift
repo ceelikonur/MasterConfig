@@ -3,13 +3,12 @@ import Foundation
 typealias WatchToken = Int
 
 @Observable
-@MainActor
 final class FileWatcherService {
     private var watchers: [WatchToken: DispatchSourceFileSystemObject] = [:]
     private var nextToken: WatchToken = 0
 
     @discardableResult
-    func watch(_ path: String, onChange: @escaping () -> Void) -> WatchToken {
+    func watch(_ path: String, onChange: @escaping @Sendable () -> Void) -> WatchToken {
         let expandedPath = (path as NSString).expandingTildeInPath
         let fd = open(expandedPath, O_EVTONLY)
         guard fd >= 0 else { return -1 }

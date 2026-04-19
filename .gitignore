@@ -17,3 +17,4 @@ xcuserdata/
 # Environment
 .env
 .env.local
+.env.supabase

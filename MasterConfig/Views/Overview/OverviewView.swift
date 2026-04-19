@@ -1,8 +1,9 @@
 import SwiftUI
 
 struct OverviewView: View {
-    @Environment(ClaudeService.self) private var claudeService
-    @Environment(RepoService.self) private var repoService
+    @Environment(ClaudeService.self)   private var claudeService
+    @Environment(RepoService.self)     private var repoService
+    @Environment(ActivityService.self) private var activityService
 
     var onNavigate: ((NavSection) -> Void)? = nil
 
@@ -88,43 +89,15 @@ struct OverviewView: View {
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(Color(red: 0.75, green: 0.80, blue: 0.97))
 
-                    if recentProjects.isEmpty {
-                        Text("No project activity found.")
-                            .foregroundColor(Color(red: 0.34, green: 0.37, blue: 0.55))
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 20)
-                    } else {
-                        LazyVGrid(columns: columns, spacing: 16) {
-                            ForEach(recentProjects, id: \.slug) { project in
-                                VStack(alignment: .leading, spacing: 8) {
-                                    HStack {
-                                        Image(systemName: "folder.badge.questionmark")
-                                            .foregroundColor(Color(red: 0.48, green: 0.64, blue: 0.97))
-                                        Spacer()
-                                        Text("\(project.fileCount)")
-                                            .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                            .foregroundColor(Color(red: 0.62, green: 0.81, blue: 0.42))
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 3)
-                                            .background(Color(red: 0.62, green: 0.81, blue: 0.42).opacity(0.15))
-                                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                                    }
-
-                                    Text(formatSlug(project.slug))
-                                        .font(.system(size: 13, weight: .medium))
-                                        .foregroundColor(Color(red: 0.75, green: 0.80, blue: 0.97))
-                                        .lineLimit(2)
-                                        .truncationMode(.middle)
-                                }
-                                .padding(14)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color(red: 0.13, green: 0.14, blue: 0.18))
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                                .shadow(color: .black.opacity(0.2), radius: 3, y: 1)
-                                .onTapGesture { onNavigate?(.memory) }
-                            }
-                        }
-                    }
+                    ActivityFeedWidget(
+                        entries: Array(activityService.entries.prefix(6)),
+                        onViewAll: { onNavigate?(.activity) }
+                    )
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(red: 0.13, green: 0.14, blue: 0.18))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .shadow(color: .black.opacity(0.2), radius: 3, y: 1)
 
                     // MARK: - Quick Actions
                     Text("Quick Actions")
@@ -187,21 +160,6 @@ struct OverviewView: View {
         }
     }
 
-    // MARK: - Recent Activity Helpers
-
-    private var recentProjects: [(slug: String, fileCount: Int)] {
-        let grouped = Dictionary(grouping: claudeService.memoryFiles.filter { !$0.isGlobal }) { $0.projectSlug ?? "unknown" }
-        return grouped.map { (slug: $0.key, fileCount: $0.value.count) }
-                      .sorted { $0.slug < $1.slug }
-                      .prefix(6)
-                      .map { $0 }
-    }
-
-    private func formatSlug(_ slug: String) -> String {
-        var s = slug
-        if s.hasPrefix("-") { s = String(s.dropFirst()) }
-        return s.replacingOccurrences(of: "-", with: "/")
-    }
 }
 
 // MARK: - Stat Card
