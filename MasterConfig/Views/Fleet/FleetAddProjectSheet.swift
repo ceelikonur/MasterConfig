@@ -6,59 +6,91 @@ struct FleetAddProjectSheet: View {
     @Environment(FleetService.self) private var fleetService
     @Environment(\.dismiss) private var dismiss
 
-    // Basics
-    @State private var name = ""
-    @State private var clientName = ""
-    @State private var notes = ""
+    let editingProject: FleetProject?
 
-    // GitHub
-    @State private var githubEnabled = false
-    @State private var ghOwner = ""
-    @State private var ghRepo = ""
-    @State private var ghBranch = ""
-    @State private var ghToken = ""
+    @State private var name: String
+    @State private var clientName: String
+    @State private var notes: String
 
-    // Supabase
-    @State private var supabaseEnabled = false
-    @State private var sbProjectRef = ""
-    @State private var sbRegion = ""
-    @State private var sbToken = ""
+    @State private var githubEnabled: Bool
+    @State private var ghOwner: String
+    @State private var ghRepo: String
+    @State private var ghBranch: String
+    @State private var ghToken: String = ""
 
-    // Netlify
-    @State private var netlifyEnabled = false
-    @State private var nfSiteId = ""
-    @State private var nfSiteName = ""
-    @State private var nfToken = ""
+    @State private var supabaseEnabled: Bool
+    @State private var sbProjectRef: String
+    @State private var sbRegion: String
+    @State private var sbToken: String = ""
 
-    // Submit state
+    @State private var netlifyEnabled: Bool
+    @State private var nfSiteId: String
+    @State private var nfSiteName: String
+    @State private var nfToken: String = ""
+
     @State private var isSubmitting = false
     @State private var errorMessage: String?
 
+    init(editingProject: FleetProject? = nil) {
+        self.editingProject = editingProject
+        _name       = State(initialValue: editingProject?.name ?? "")
+        _clientName = State(initialValue: editingProject?.clientName ?? "")
+        _notes      = State(initialValue: editingProject?.notes ?? "")
+
+        _githubEnabled = State(initialValue: editingProject?.github != nil)
+        _ghOwner       = State(initialValue: editingProject?.github?.owner ?? "")
+        _ghRepo        = State(initialValue: editingProject?.github?.repo ?? "")
+        _ghBranch      = State(initialValue: editingProject?.github?.defaultBranch ?? "")
+
+        _supabaseEnabled = State(initialValue: editingProject?.supabase != nil)
+        _sbProjectRef    = State(initialValue: editingProject?.supabase?.projectRef ?? "")
+        _sbRegion        = State(initialValue: editingProject?.supabase?.region ?? "")
+
+        _netlifyEnabled = State(initialValue: editingProject?.netlify != nil)
+        _nfSiteId       = State(initialValue: editingProject?.netlify?.siteId ?? "")
+        _nfSiteName     = State(initialValue: editingProject?.netlify?.siteName ?? "")
+    }
+
+    // MARK: - Derived state
+
+    private var isEditing: Bool { editingProject != nil }
+    private var githubWasConfigured: Bool   { editingProject?.github   != nil }
+    private var supabaseWasConfigured: Bool { editingProject?.supabase != nil }
+    private var netlifyWasConfigured: Bool  { editingProject?.netlify  != nil }
+
     // MARK: - Validation
 
+    // Token is required when adding OR when enabling an integration that wasn't previously configured.
+    // In edit mode, if the integration was already configured, token can stay blank to keep existing.
+
     private var isGithubValid: Bool {
-        githubEnabled &&
-        !ghOwner.trimmingCharacters(in: .whitespaces).isEmpty &&
-        !ghRepo.trimmingCharacters(in: .whitespaces).isEmpty &&
-        !ghToken.isEmpty
+        guard githubEnabled else { return false }
+        let ownerOk = !ghOwner.trimmingCharacters(in: .whitespaces).isEmpty
+        let repoOk  = !ghRepo.trimmingCharacters(in: .whitespaces).isEmpty
+        let tokenOk = !ghToken.isEmpty || (isEditing && githubWasConfigured)
+        return ownerOk && repoOk && tokenOk
     }
 
     private var isSupabaseValid: Bool {
-        supabaseEnabled &&
-        !sbProjectRef.trimmingCharacters(in: .whitespaces).isEmpty &&
-        !sbToken.isEmpty
+        guard supabaseEnabled else { return false }
+        let refOk   = !sbProjectRef.trimmingCharacters(in: .whitespaces).isEmpty
+        let tokenOk = !sbToken.isEmpty || (isEditing && supabaseWasConfigured)
+        return refOk && tokenOk
     }
 
     private var isNetlifyValid: Bool {
-        netlifyEnabled &&
-        !nfSiteId.trimmingCharacters(in: .whitespaces).isEmpty &&
-        !nfToken.isEmpty
+        guard netlifyEnabled else { return false }
+        let idOk    = !nfSiteId.trimmingCharacters(in: .whitespaces).isEmpty
+        let tokenOk = !nfToken.isEmpty || (isEditing && netlifyWasConfigured)
+        return idOk && tokenOk
     }
 
     private var canSubmit: Bool {
         let nameOk = !name.trimmingCharacters(in: .whitespaces).isEmpty
         let anyIntegration = isGithubValid || isSupabaseValid || isNetlifyValid
-        return nameOk && anyIntegration && !isSubmitting
+        let noneDisabled   = githubEnabled  || supabaseEnabled || netlifyEnabled
+        // in edit mode, allow saving even if user turned ALL integrations off (just removes refs)
+        return nameOk && (anyIntegration || (isEditing && !noneDisabled)) && !isSubmitting
     }
 
     // MARK: - Body
@@ -81,7 +113,7 @@ struct FleetAddProjectSheet: View {
                         TextField("Owner (e.g. anthropic)", text: $ghOwner)
                         TextField("Repo", text: $ghRepo)
                         TextField("Default branch (optional)", text: $ghBranch, prompt: Text("main"))
-                        SecureField("Personal Access Token", text: $ghToken)
+                        SecureField(tokenPrompt(wasConfigured: githubWasConfigured), text: $ghToken)
                     }
                 } header: {
                     Label("GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
@@ -92,7 +124,7 @@ struct FleetAddProjectSheet: View {
                     if supabaseEnabled {
                         TextField("Project ref", text: $sbProjectRef)
                         TextField("Region (optional)", text: $sbRegion)
-                        SecureField("Management API PAT", text: $sbToken)
+                        SecureField(tokenPrompt(wasConfigured: supabaseWasConfigured, label: "Management API PAT"), text: $sbToken)
                     }
                 } header: {
                     Label("Supabase", systemImage: "cylinder.split.1x2")
@@ -103,7 +135,7 @@ struct FleetAddProjectSheet: View {
                     if netlifyEnabled {
                         TextField("Site ID", text: $nfSiteId)
                         TextField("Site name (optional)", text: $nfSiteName)
-                        SecureField("Personal Access Token", text: $nfToken)
+                        SecureField(tokenPrompt(wasConfigured: netlifyWasConfigured), text: $nfToken)
                     }
                 } header: {
                     Label("Netlify", systemImage: "globe")
@@ -129,7 +161,8 @@ struct FleetAddProjectSheet: View {
 
     private var header: some View {
         HStack {
-            Label("Add Fleet Project", systemImage: "shippingbox.and.arrow.backward")
+            Label(isEditing ? "Edit Fleet Project" : "Add Fleet Project",
+                  systemImage: "shippingbox.and.arrow.backward")
                 .font(.headline)
             Spacer()
             Button("Cancel") { dismiss() }
@@ -152,7 +185,7 @@ struct FleetAddProjectSheet: View {
             Button {
                 Task { await submit() }
             } label: {
-                Text("Add Project")
+                Text(isEditing ? "Save" : "Add Project")
                     .frame(minWidth: 110)
             }
             .buttonStyle(.borderedProminent)
@@ -160,6 +193,13 @@ struct FleetAddProjectSheet: View {
             .keyboardShortcut(.return, modifiers: .command)
         }
         .padding()
+    }
+
+    private func tokenPrompt(wasConfigured: Bool, label: String = "Personal Access Token") -> String {
+        if isEditing && wasConfigured {
+            return "Leave blank to keep existing token"
+        }
+        return label
     }
 
     // MARK: - Submit
@@ -170,7 +210,7 @@ struct FleetAddProjectSheet: View {
         errorMessage = nil
         defer { isSubmitting = false }
 
-        let projectID = UUID().uuidString
+        let projectID = editingProject?.id ?? UUID().uuidString
         let keychain = KeychainService.shared
 
         var githubRef: GitHubRef?
@@ -178,9 +218,11 @@ struct FleetAddProjectSheet: View {
         var netlifyRef: NetlifyRef?
 
         do {
-            if isGithubValid {
-                let key = "github_\(projectID)"
-                try await keychain.setToken(ghToken, forKey: key)
+            if githubEnabled && isGithubValid {
+                let key = editingProject?.github?.tokenKeychainKey ?? "github_\(projectID)"
+                if !ghToken.isEmpty {
+                    try await keychain.setToken(ghToken, forKey: key)
+                }
                 let branchTrim = ghBranch.trimmingCharacters(in: .whitespaces)
                 githubRef = GitHubRef(
                     owner: ghOwner.trimmingCharacters(in: .whitespaces),
@@ -190,9 +232,11 @@ struct FleetAddProjectSheet: View {
                 )
             }
 
-            if isSupabaseValid {
-                let key = "supabase_\(projectID)"
-                try await keychain.setToken(sbToken, forKey: key)
+            if supabaseEnabled && isSupabaseValid {
+                let key = editingProject?.supabase?.tokenKeychainKey ?? "supabase_\(projectID)"
+                if !sbToken.isEmpty {
+                    try await keychain.setToken(sbToken, forKey: key)
+                }
                 let regionTrim = sbRegion.trimmingCharacters(in: .whitespaces)
                 supabaseRef = SupabaseRef(
                     projectRef: sbProjectRef.trimmingCharacters(in: .whitespaces),
@@ -201,9 +245,11 @@ struct FleetAddProjectSheet: View {
                 )
             }
 
-            if isNetlifyValid {
-                let key = "netlify_\(projectID)"
-                try await keychain.setToken(nfToken, forKey: key)
+            if netlifyEnabled && isNetlifyValid {
+                let key = editingProject?.netlify?.tokenKeychainKey ?? "netlify_\(projectID)"
+                if !nfToken.isEmpty {
+                    try await keychain.setToken(nfToken, forKey: key)
+                }
                 let siteNameTrim = nfSiteName.trimmingCharacters(in: .whitespaces)
                 netlifyRef = NetlifyRef(
                     siteId: nfSiteId.trimmingCharacters(in: .whitespaces),
@@ -216,25 +262,36 @@ struct FleetAddProjectSheet: View {
             return
         }
 
-        let project = FleetProject(
-            id: projectID,
-            name: name.trimmingCharacters(in: .whitespaces),
-            clientName: clientName.trimmingCharacters(in: .whitespaces).isEmpty
-                ? nil
-                : clientName.trimmingCharacters(in: .whitespaces),
-            notes: notes.trimmingCharacters(in: .whitespaces).isEmpty
-                ? nil
-                : notes.trimmingCharacters(in: .whitespaces),
-            github: githubRef,
-            supabase: supabaseRef,
-            netlify: netlifyRef
-        )
+        let trimmedClient = clientName.trimmingCharacters(in: .whitespaces)
+        let trimmedNotes  = notes.trimmingCharacters(in: .whitespaces)
 
-        fleetService.addProject(project)
+        if let existing = editingProject {
+            var updated = existing
+            updated.name       = name.trimmingCharacters(in: .whitespaces)
+            updated.clientName = trimmedClient.isEmpty ? nil : trimmedClient
+            updated.notes      = trimmedNotes.isEmpty  ? nil : trimmedNotes
+            updated.github     = githubRef
+            updated.supabase   = supabaseRef
+            updated.netlify    = netlifyRef
+            fleetService.updateProject(updated)
+        } else {
+            let project = FleetProject(
+                id: projectID,
+                name: name.trimmingCharacters(in: .whitespaces),
+                clientName: trimmedClient.isEmpty ? nil : trimmedClient,
+                notes: trimmedNotes.isEmpty ? nil : trimmedNotes,
+                github: githubRef,
+                supabase: supabaseRef,
+                netlify: netlifyRef
+            )
+            fleetService.addProject(project)
+        }
+
         dismiss()
 
+        let refreshID = projectID
         Task {
-            await fleetService.refreshHealth(for: project.id)
+            await fleetService.refreshHealth(for: refreshID)
         }
     }
 }

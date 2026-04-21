@@ -10,6 +10,7 @@ struct FleetProjectDetailView: View {
 
     @State private var isRefreshing = false
     @State private var showRemoveAlert = false
+    @State private var showEditSheet = false
 
     private var project: FleetProject? {
         fleetService.projects.first { $0.id == projectId }
@@ -50,6 +51,11 @@ struct FleetProjectDetailView: View {
             }
         } message: {
             Text("This removes the project from your fleet. Keychain tokens remain but become orphaned.")
+        }
+        .sheet(isPresented: $showEditSheet) {
+            if let project {
+                FleetAddProjectSheet(editingProject: project)
+            }
         }
     }
 
@@ -98,17 +104,26 @@ struct FleetProjectDetailView: View {
 
                 Spacer()
 
-                Button {
-                    Task {
-                        isRefreshing = true
-                        await fleetService.refreshHealth(for: projectId)
-                        isRefreshing = false
+                VStack(alignment: .trailing, spacing: 6) {
+                    Button {
+                        Task {
+                            isRefreshing = true
+                            await fleetService.refreshHealth(for: projectId)
+                            isRefreshing = false
+                        }
+                    } label: {
+                        Label(isRefreshing ? "Refreshing…" : "Refresh", systemImage: "arrow.clockwise")
                     }
-                } label: {
-                    Label(isRefreshing ? "Refreshing…" : "Refresh", systemImage: "arrow.clockwise")
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isRefreshing)
+
+                    Button {
+                        showEditSheet = true
+                    } label: {
+                        Label("Edit", systemImage: "pencil")
+                    }
+                    .buttonStyle(.bordered)
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(isRefreshing)
             }
 
             if let notes = project.notes, !notes.isEmpty {
