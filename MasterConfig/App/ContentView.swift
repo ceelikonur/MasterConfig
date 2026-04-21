@@ -6,6 +6,7 @@ struct ContentView: View {
     @Environment(PrefsService.self) private var prefsService
     @Environment(TerminalService.self) private var terminalService
     @Environment(OrchestratorService.self) private var orchestratorService
+    @Environment(FleetService.self) private var fleetService
 
     @State private var selection: NavSection? = .overview
     @State private var showCommandPalette = false
@@ -76,6 +77,8 @@ struct ContentView: View {
             ChatView()
         case .orchestrator:
             OrchestratorView()
+        case .fleet:
+            FleetView()
         case .costs:
             CostsView()
         case .approvals:

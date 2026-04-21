@@ -15,6 +15,7 @@ struct MasterConfigApp: App {
     @State private var routineService       = RoutineService()
     @State private var activityService      = ActivityService()
     @State private var importExportService  = ImportExportService()
+    @State private var fleetService         = FleetService()
 
     var body: some Scene {
         WindowGroup {
@@ -32,6 +33,7 @@ struct MasterConfigApp: App {
                 .environment(routineService)
                 .environment(activityService)
                 .environment(importExportService)
+                .environment(fleetService)
                 .task {
                     // Wire up shared TerminalService for pane-based agent spawning
                     orchestratorService.terminalService = terminalService
@@ -54,6 +56,7 @@ struct MasterConfigApp: App {
                     governanceService.requestNotificationPermission()
                     routineService.load()
                     routineService.startTimer()
+                    fleetService.load()
                 }
         }
         .windowStyle(.hiddenTitleBar)
